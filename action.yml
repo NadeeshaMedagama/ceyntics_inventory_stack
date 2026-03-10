@@ -1,0 +1,319 @@
+# ============================================================
+# Ceyntics Inventory Stack — GitHub Marketplace Action
+# ============================================================
+# A composite GitHub Action for building, testing, and
+# deploying the Ceyntics Inventory Management microservices
+# stack (Laravel 12 + Next.js 16 + PostgreSQL).
+#
+# Publish to Marketplace: tag a release → the action becomes
+# available at: uses: <owner>/ceyntics-inventory-stack@v1
+# ============================================================
+
+name: "Ceyntics Inventory Stack Deploy"
+description: >
+  Build, test, and deploy the Ceyntics Inventory Management microservices stack.
+  Supports 5 Laravel backend services + 1 Next.js frontend. Push Docker images
+  to Docker Hub and/or GitHub Container Registry (GHCR).
+author: "Ceyntics"
+
+branding:
+  icon: "box"
+  color: "blue"
+
+# ─────────────────────────────────────────────
+# Inputs
+# ─────────────────────────────────────────────
+inputs:
+  dockerhub-username:
+    description: "Docker Hub username for pushing images"
+    required: true
+
+  dockerhub-token:
+    description: "Docker Hub access token (PAT with read/write permissions)"
+    required: true
+
+  services:
+    description: >
+      Comma-separated list of services to build & push.
+      Available: auth-service, user-service, inventory-service,
+      borrow-service, audit-service, frontend
+    required: false
+    default: "auth-service,user-service,inventory-service,borrow-service,audit-service,frontend"
+
+  image-prefix:
+    description: "Prefix for Docker image names (e.g. 'ceyntics' → ceyntics-auth-service)"
+    required: false
+    default: "ceyntics"
+
+  tag:
+    description: "Primary Docker image tag"
+    required: false
+    default: "latest"
+
+  tag-with-sha:
+    description: "Also tag images with the short Git SHA"
+    required: false
+    default: "true"
+
+  push-to-ghcr:
+    description: "Also push images to GitHub Container Registry (ghcr.io)"
+    required: false
+    default: "false"
+
+  ghcr-token:
+    description: "GitHub token for GHCR authentication (defaults to github.token)"
+    required: false
+    default: ""
+
+  run-tests:
+    description: "Run tests before building images"
+    required: false
+    default: "true"
+
+  php-version:
+    description: "PHP version for backend Laravel service tests"
+    required: false
+    default: "8.3"
+
+  node-version:
+    description: "Node.js version for frontend Next.js build & tests"
+    required: false
+    default: "20"
+
+  platform:
+    description: "Docker build platform (e.g. linux/amd64, linux/arm64)"
+    required: false
+    default: "linux/amd64"
+
+  build-args:
+    description: "Additional Docker build arguments (KEY=VALUE, one per line)"
+    required: false
+    default: ""
+
+# ─────────────────────────────────────────────
+# Outputs
+# ─────────────────────────────────────────────
+outputs:
+  images:
+    description: "Comma-separated list of pushed Docker image references"
+    value: ${{ steps.build-push.outputs.images }}
+
+  images-json:
+    description: "JSON array of pushed Docker image references"
+    value: ${{ steps.build-push.outputs.images_json }}
+
+  test-result:
+    description: "Test result: 'passed', 'failed', or 'skipped'"
+    value: ${{ steps.test-backend.outputs.result || steps.skip-tests.outputs.result }}
+
+  sha-tag:
+    description: "The short SHA tag applied to images"
+    value: ${{ steps.prepare.outputs.short_sha }}
+
+# ─────────────────────────────────────────────
+# Composite Steps
+# ─────────────────────────────────────────────
+runs:
+  using: "composite"
+  steps:
+    # ── Prepare ──────────────────────────────
+    - name: Prepare metadata
+      id: prepare
+      shell: bash
+      run: |
+        SHORT_SHA=$(echo "${GITHUB_SHA}" | head -c 7)
+        echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+        echo "📦 Ceyntics Inventory Stack Deploy"
+        echo "   Tag:       ${{ inputs.tag }}"
+        echo "   SHA:       ${SHORT_SHA}"
+        echo "   Services:  ${{ inputs.services }}"
+        echo "   Platform:  ${{ inputs.platform }}"
+        echo "   Tests:     ${{ inputs.run-tests }}"
+        echo "   GHCR:      ${{ inputs.push-to-ghcr }}"
+
+    # ── Setup Node.js ────────────────────────
+    - name: Setup Node.js ${{ inputs.node-version }}
+      if: contains(inputs.services, 'frontend')
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    # ── Setup PHP ────────────────────────────
+    - name: Setup PHP ${{ inputs.php-version }}
+      if: inputs.run-tests == 'true'
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ inputs.php-version }}
+        extensions: pdo_sqlite, mbstring, xml, ctype, json, bcmath, gd, zip
+        coverage: none
+
+    # ── Test Frontend ────────────────────────
+    - name: Test frontend (Next.js)
+      id: test-frontend
+      if: inputs.run-tests == 'true' && contains(inputs.services, 'frontend')
+      shell: bash
+      working-directory: frontend
+      run: |
+        echo "::group::📦 Installing frontend dependencies"
+        npm ci --prefer-offline --no-audit
+        echo "::endgroup::"
+
+        echo "::group::🔍 Running ESLint"
+        npm run lint
+        echo "::endgroup::"
+
+        echo "::group::🏗️ Building Next.js"
+        npm run build
+        echo "::endgroup::"
+      env:
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+
+    # ── Test Backend Services ────────────────
+    - name: Test backend services (Laravel)
+      id: test-backend
+      if: inputs.run-tests == 'true'
+      shell: bash
+      run: |
+        IFS=',' read -ra SERVICES <<< "${{ inputs.services }}"
+        FAILED=0
+
+        for svc in "${SERVICES[@]}"; do
+          svc=$(echo "$svc" | xargs)
+          [[ "$svc" == "frontend" ]] && continue
+          [[ ! -d "services/$svc" ]] && continue
+
+          echo "::group::🧪 Testing $svc"
+          cd "services/$svc"
+
+          composer install --no-interaction --prefer-dist --optimize-autoloader --quiet
+          cp .env.example .env 2>/dev/null || true
+          php artisan key:generate --force 2>/dev/null || true
+
+          if vendor/bin/phpunit --colors=always; then
+            echo "✅ $svc — all tests passed"
+          else
+            echo "❌ $svc — tests failed"
+            FAILED=1
+          fi
+
+          cd ../..
+          echo "::endgroup::"
+        done
+
+        if [ "$FAILED" -eq 1 ]; then
+          echo "result=failed" >> $GITHUB_OUTPUT
+          echo "::error::One or more backend services failed tests"
+          exit 1
+        fi
+
+        echo "result=passed" >> $GITHUB_OUTPUT
+      env:
+        DB_CONNECTION: sqlite
+        DB_DATABASE: ":memory:"
+
+    # ── Skip tests marker ────────────────────
+    - name: Mark tests as skipped
+      id: skip-tests
+      if: inputs.run-tests != 'true'
+      shell: bash
+      run: echo "result=skipped" >> $GITHUB_OUTPUT
+
+    # ── Docker Buildx ────────────────────────
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    # ── Login to Docker Hub ──────────────────
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ inputs.dockerhub-username }}
+        password: ${{ inputs.dockerhub-token }}
+
+    # ── Login to GHCR (optional) ─────────────
+    - name: Login to GitHub Container Registry
+      if: inputs.push-to-ghcr == 'true'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.ghcr-token || github.token }}
+
+    # ── Build & Push All Services ────────────
+    - name: Build and push Docker images
+      id: build-push
+      shell: bash
+      run: |
+        IFS=',' read -ra SERVICES <<< "${{ inputs.services }}"
+        PUSHED_IMAGES=""
+        PUSHED_JSON="["
+        SHORT_SHA=${{ steps.prepare.outputs.short_sha }}
+        BUILD_ARGS=""
+
+        # Parse build args
+        if [ -n "${{ inputs.build-args }}" ]; then
+          while IFS= read -r arg; do
+            [ -n "$arg" ] && BUILD_ARGS="$BUILD_ARGS --build-arg $arg"
+          done <<< "${{ inputs.build-args }}"
+        fi
+
+        for svc in "${SERVICES[@]}"; do
+          svc=$(echo "$svc" | xargs)
+
+          # Determine context & dockerfile
+          if [ "$svc" = "frontend" ]; then
+            CONTEXT="./frontend"
+            DOCKERFILE="./frontend/Dockerfile"
+          else
+            CONTEXT="./services/$svc"
+            DOCKERFILE="./services/$svc/Dockerfile"
+          fi
+
+          if [ ! -f "$DOCKERFILE" ]; then
+            echo "::warning::⚠️ Skipping $svc — Dockerfile not found at $DOCKERFILE"
+            continue
+          fi
+
+          # Build tag list
+          DOCKERHUB_IMAGE="${{ inputs.dockerhub-username }}/${{ inputs.image-prefix }}-${svc}"
+          TAGS="-t ${DOCKERHUB_IMAGE}:${{ inputs.tag }}"
+
+          if [ "${{ inputs.tag-with-sha }}" = "true" ]; then
+            TAGS="$TAGS -t ${DOCKERHUB_IMAGE}:${SHORT_SHA}"
+          fi
+
+          if [ "${{ inputs.push-to-ghcr }}" = "true" ]; then
+            GHCR_IMAGE="ghcr.io/${{ github.repository_owner }}/${{ inputs.image-prefix }}-${svc}"
+            TAGS="$TAGS -t ${GHCR_IMAGE}:${{ inputs.tag }}"
+            if [ "${{ inputs.tag-with-sha }}" = "true" ]; then
+              TAGS="$TAGS -t ${GHCR_IMAGE}:${SHORT_SHA}"
+            fi
+          fi
+
+          echo "::group::🐳 Building & pushing $svc"
+          echo "   Image: ${DOCKERHUB_IMAGE}:${{ inputs.tag }}"
+
+          docker buildx build \
+            --platform ${{ inputs.platform }} \
+            ${TAGS} \
+            ${BUILD_ARGS} \
+            --push \
+            -f "$DOCKERFILE" \
+            "$CONTEXT"
+
+          echo "::endgroup::"
+
+          # Collect output
+          REF="${DOCKERHUB_IMAGE}:${{ inputs.tag }}"
+          PUSHED_IMAGES="${PUSHED_IMAGES}${REF},"
+          PUSHED_JSON="${PUSHED_JSON}\"${REF}\","
+        done
+
+        # Trim trailing commas
+        PUSHED_IMAGES="${PUSHED_IMAGES%,}"
+        PUSHED_JSON="${PUSHED_JSON%,}]"
+
+        echo "images=${PUSHED_IMAGES}" >> $GITHUB_OUTPUT
+        echo "images_json=${PUSHED_JSON}" >> $GITHUB_OUTPUT
+
+        echo ""
+        echo "✅ Successfully pushed: ${PUSHED_IMAGES}"
