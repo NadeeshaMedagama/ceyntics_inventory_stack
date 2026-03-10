@@ -1,0 +1,174 @@
+# ============================================================
+# Publish Action to GitHub Marketplace
+# ============================================================
+# Publishes the composite action to GitHub Marketplace
+# when a version tag is pushed. Creates a release that
+# makes the action available for other repositories.
+# ============================================================
+
+name: Publish to GitHub Marketplace
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g., v1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish-action:
+    name: "Publish Action to Marketplace"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate action.yml
+        run: |
+          echo "── Validating action.yml for Marketplace ──"
+          
+          if [ ! -f action.yml ]; then
+            echo "::error::action.yml not found in repository root"
+            exit 1
+          fi
+          echo "✅ action.yml found"
+
+          # Required Marketplace fields
+          REQUIRED_FIELDS=("name" "description" "branding" "runs")
+          for field in "${REQUIRED_FIELDS[@]}"; do
+            if ! grep -q "^${field}:" action.yml; then
+              echo "::error::Missing required field: ${field}"
+              exit 1
+            fi
+          done
+          echo "✅ Required fields present (name, description, branding, runs)"
+
+          # Validate branding has icon and color
+          if ! grep -q "icon:" action.yml; then
+            echo "::error::Missing branding.icon (required for Marketplace)"
+            exit 1
+          fi
+          if ! grep -q "color:" action.yml; then
+            echo "::error::Missing branding.color (required for Marketplace)"
+            exit 1
+          fi
+          echo "✅ Branding section valid (icon + color)"
+
+          # Validate inputs section exists
+          if ! grep -q "^inputs:" action.yml; then
+            echo "::warning::No inputs section found"
+          else
+            INPUT_COUNT=$(grep -c "^  [a-z]" action.yml || true)
+            echo "✅ Inputs section found (${INPUT_COUNT} top-level keys)"
+          fi
+
+          # Validate composite action has 'using'
+          if ! grep -q 'using:.*"composite"' action.yml; then
+            echo "::error::Action must use 'using: composite' for composite actions"
+            exit 1
+          fi
+          echo "✅ Composite action type confirmed"
+          echo "── Validation passed ──"
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update major version tag
+        run: |
+          VERSION=${{ steps.tag.outputs.version }}
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Update major version tag (e.g., v1)
+          git tag -fa "$MAJOR" -m "Update $MAJOR tag to $VERSION"
+          git push origin "$MAJOR" --force
+          
+          echo "✅ Updated $MAJOR tag to point to $VERSION"
+
+      - name: Create Marketplace Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = '${{ steps.tag.outputs.version }}';
+            const isPrerelease = tag.includes('-rc') || tag.includes('-beta') || tag.includes('-alpha');
+            const major = tag.split('.')[0];
+
+            const body = [
+              `## 📦 Ceyntics Inventory Stack Deploy — ${tag}`,
+              '',
+              `Build, test, and deploy the Ceyntics Inventory Management microservices stack (Laravel 12 + Next.js 16).`,
+              '',
+              '### Quick Start',
+              '',
+              '```yaml',
+              'steps:',
+              '  - uses: actions/checkout@v4',
+              '',
+              `  - name: Deploy Ceyntics Inventory Stack`,
+              `    uses: ${context.repo.owner}/${context.repo.repo}@${major}`,
+              '    with:',
+              '      dockerhub-username: $' + '{{ secrets.DOCKERHUB_USERNAME }}',
+              '      dockerhub-token: $' + '{{ secrets.DOCKERHUB_TOKEN }}',
+              '```',
+              '',
+              '### All Inputs',
+              '',
+              '| Input | Required | Default | Description |',
+              '|---|---|---|---|',
+              '| `dockerhub-username` | ✅ | — | Docker Hub username |',
+              '| `dockerhub-token` | ✅ | — | Docker Hub access token |',
+              '| `services` | ❌ | all services | Comma-separated list of services to build |',
+              '| `image-prefix` | ❌ | `ceyntics` | Docker image name prefix |',
+              '| `tag` | ❌ | `latest` | Primary Docker image tag |',
+              '| `tag-with-sha` | ❌ | `true` | Also tag images with Git short SHA |',
+              '| `push-to-ghcr` | ❌ | `false` | Also push to GitHub Container Registry |',
+              '| `ghcr-token` | ❌ | `github.token` | Token for GHCR authentication |',
+              '| `run-tests` | ❌ | `true` | Run tests before building |',
+              '| `php-version` | ❌ | `8.3` | PHP version for Laravel tests |',
+              '| `node-version` | ❌ | `20` | Node.js version for Next.js build |',
+              '| `platform` | ❌ | `linux/amd64` | Docker build platform |',
+              '| `build-args` | ❌ | — | Additional Docker build args |',
+              '',
+              '### Outputs',
+              '',
+              '| Output | Description |',
+              '|---|---|',
+              '| `images` | Comma-separated list of pushed image references |',
+              '| `images-json` | JSON array of pushed image references |',
+              '| `test-result` | `passed`, `failed`, or `skipped` |',
+              '| `sha-tag` | Short SHA tag applied to images |',
+              '',
+              '### Available Services',
+              '',
+              '`auth-service` · `user-service` · `inventory-service` · `borrow-service` · `audit-service` · `frontend`',
+              '',
+              `See [README](https://github.com/${context.repo.owner}/${context.repo.repo}#readme) for full documentation.`,
+            ].join('\n');
+
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `Ceyntics Inventory Stack Deploy ${tag}`,
+              body,
+              draft: false,
+              prerelease: isPrerelease,
+              make_latest: !isPrerelease ? 'true' : 'false',
+            });
+
