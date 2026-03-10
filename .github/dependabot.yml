@@ -1,0 +1,198 @@
+# ============================================================
+# Dependabot Configuration
+# ============================================================
+# Automatically creates PRs for dependency updates across
+# all package ecosystems: npm, composer, docker, github-actions.
+# ============================================================
+
+version: 2
+
+updates:
+  # ─────────────────────────────────────────────
+  # GitHub Actions
+  # ─────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    open-pull-requests-limit: 10
+
+  # ─────────────────────────────────────────────
+  # Root npm (gateway & dev tools)
+  # ─────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    commit-message:
+      prefix: "chore"
+    labels:
+      - "dependencies"
+      - "npm"
+    open-pull-requests-limit: 10
+
+  # ─────────────────────────────────────────────
+  # Frontend (Next.js)
+  # ─────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+    commit-message:
+      prefix: "chore(frontend)"
+    labels:
+      - "dependencies"
+      - "npm"
+      - "frontend"
+    open-pull-requests-limit: 15
+    groups:
+      next-js:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      tailwind:
+        patterns:
+          - "tailwindcss"
+          - "@tailwindcss/*"
+
+  # ─────────────────────────────────────────────
+  # Auth Service (Composer)
+  # ─────────────────────────────────────────────
+  - package-ecosystem: "composer"
+    directory: "/services/auth-service"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+    commit-message:
+      prefix: "chore(auth)"
+    labels:
+      - "dependencies"
+      - "composer"
+      - "auth-service"
+    open-pull-requests-limit: 10
+    groups:
+      laravel:
+        patterns:
+          - "laravel/*"
+
+  # ─────────────────────────────────────────────
+  # User Service (Composer)
+  # ─────────────────────────────────────────────
+  - package-ecosystem: "composer"
+    directory: "/services/user-service"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+    commit-message:
+      prefix: "chore(user)"
+    labels:
+      - "dependencies"
+      - "composer"
+      - "user-service"
+    open-pull-requests-limit: 10
+    groups:
+      laravel:
+        patterns:
+          - "laravel/*"
+
+  # ─────────────────────────────────────────────
+  # Inventory Service (Composer)
+  # ─────────────────────────────────────────────
+  - package-ecosystem: "composer"
+    directory: "/services/inventory-service"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+    commit-message:
+      prefix: "chore(inventory)"
+    labels:
+      - "dependencies"
+      - "composer"
+      - "inventory-service"
+    open-pull-requests-limit: 10
+    groups:
+      laravel:
+        patterns:
+          - "laravel/*"
+
+  # ─────────────────────────────────────────────
+  # Borrow Service (Composer)
+  # ─────────────────────────────────────────────
+  - package-ecosystem: "composer"
+    directory: "/services/borrow-service"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+    commit-message:
+      prefix: "chore(borrow)"
+    labels:
+      - "dependencies"
+      - "composer"
+      - "borrow-service"
+    open-pull-requests-limit: 10
+    groups:
+      laravel:
+        patterns:
+          - "laravel/*"
+
+  # ─────────────────────────────────────────────
+  # Audit Service (Composer)
+  # ─────────────────────────────────────────────
+  - package-ecosystem: "composer"
+    directory: "/services/audit-service"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+    commit-message:
+      prefix: "chore(audit)"
+    labels:
+      - "dependencies"
+      - "composer"
+      - "audit-service"
+    open-pull-requests-limit: 10
+    groups:
+      laravel:
+        patterns:
+          - "laravel/*"
+
+  # ─────────────────────────────────────────────
+  # Docker (base images)
+  # ─────────────────────────────────────────────
+  - package-ecosystem: "docker"
+    directory: "/services/auth-service"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+    commit-message:
+      prefix: "chore(docker)"
+    labels:
+      - "dependencies"
+      - "docker"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+    commit-message:
+      prefix: "chore(docker)"
+    labels:
+      - "dependencies"
+      - "docker"
+    open-pull-requests-limit: 5
+
