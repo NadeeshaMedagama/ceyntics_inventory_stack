@@ -101,7 +101,7 @@ jobs:
 
       - name: Generate changelog
         id: changelog
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { data: commits } = await github.rest.repos.compareCommitsWithBasehead({
@@ -141,7 +141,7 @@ jobs:
             core.setOutput('changelog', changelog);
 
       - name: Create GitHub Release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const tag = '${{ steps.get-tag.outputs.tag }}';
