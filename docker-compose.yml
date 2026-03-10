@@ -1,0 +1,225 @@
+version: '3.9'
+
+services:
+  # ─────────────────────────────────────────────
+  # PostgreSQL Database
+  # ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: ceyntics_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ceyntics
+      POSTGRES_PASSWORD: ceyntics_secret
+      POSTGRES_DB: auth_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    ports:
+      - "5432:5432"
+    networks:
+      - ceyntics_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ceyntics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # Auth Service (Port 8001)
+  # ─────────────────────────────────────────────
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: ceyntics_auth
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: auth_db
+      DB_USERNAME: ceyntics
+      DB_PASSWORD: ceyntics_secret
+      APP_KEY: base64:your-app-key-here
+      APP_ENV: local
+      APP_DEBUG: "true"
+    volumes:
+      - ./services/auth-service:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ceyntics_network
+
+  # ─────────────────────────────────────────────
+  # User Service (Port 8002)
+  # ─────────────────────────────────────────────
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: ceyntics_users
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: user_db
+      DB_USERNAME: ceyntics
+      DB_PASSWORD: ceyntics_secret
+      APP_KEY: base64:your-app-key-here
+      APP_ENV: local
+      APP_DEBUG: "true"
+      AUTH_SERVICE_URL: http://auth-service:8000
+    volumes:
+      - ./services/user-service:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ceyntics_network
+
+  # ─────────────────────────────────────────────
+  # Inventory Service (Port 8003)
+  # ─────────────────────────────────────────────
+  inventory-service:
+    build:
+      context: ./services/inventory-service
+      dockerfile: Dockerfile
+    container_name: ceyntics_inventory
+    restart: unless-stopped
+    ports:
+      - "8003:8000"
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: inventory_db
+      DB_USERNAME: ceyntics
+      DB_PASSWORD: ceyntics_secret
+      APP_KEY: base64:your-app-key-here
+      APP_ENV: local
+      APP_DEBUG: "true"
+      AUTH_SERVICE_URL: http://auth-service:8000
+      AUDIT_SERVICE_URL: http://audit-service:8000
+    volumes:
+      - ./services/inventory-service:/var/www/html
+      - inventory_storage:/var/www/html/storage/app/public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ceyntics_network
+
+  # ─────────────────────────────────────────────
+  # Borrow Service (Port 8004)
+  # ─────────────────────────────────────────────
+  borrow-service:
+    build:
+      context: ./services/borrow-service
+      dockerfile: Dockerfile
+    container_name: ceyntics_borrow
+    restart: unless-stopped
+    ports:
+      - "8004:8000"
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: borrow_db
+      DB_USERNAME: ceyntics
+      DB_PASSWORD: ceyntics_secret
+      APP_KEY: base64:your-app-key-here
+      APP_ENV: local
+      APP_DEBUG: "true"
+      AUTH_SERVICE_URL: http://auth-service:8000
+      INVENTORY_SERVICE_URL: http://inventory-service:8000
+      AUDIT_SERVICE_URL: http://audit-service:8000
+    volumes:
+      - ./services/borrow-service:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ceyntics_network
+
+  # ─────────────────────────────────────────────
+  # Audit Service (Port 8005)
+  # ─────────────────────────────────────────────
+  audit-service:
+    build:
+      context: ./services/audit-service
+      dockerfile: Dockerfile
+    container_name: ceyntics_audit
+    restart: unless-stopped
+    ports:
+      - "8005:8000"
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: audit_db
+      DB_USERNAME: ceyntics
+      DB_PASSWORD: ceyntics_secret
+      APP_KEY: base64:your-app-key-here
+      APP_ENV: local
+      APP_DEBUG: "true"
+      AUTH_SERVICE_URL: http://auth-service:8000
+    volumes:
+      - ./services/audit-service:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ceyntics_network
+
+  # ─────────────────────────────────────────────
+  # API Gateway — Nginx (Port 8000)
+  # ─────────────────────────────────────────────
+  api-gateway:
+    image: nginx:alpine
+    container_name: ceyntics_gateway
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./api-gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth-service
+      - user-service
+      - inventory-service
+      - borrow-service
+      - audit-service
+    networks:
+      - ceyntics_network
+
+  # ─────────────────────────────────────────────
+  # Frontend — Next.js (Port 3000)
+  # ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ceyntics_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_GATEWAY_URL: http://localhost:8000
+    depends_on:
+      - api-gateway
+    networks:
+      - ceyntics_network
+
+volumes:
+  postgres_data:
+  inventory_storage:
+
+networks:
+  ceyntics_network:
+    driver: bridge
