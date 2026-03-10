@@ -1,0 +1,32 @@
+# ============================================================
+# GitHub Copilot Code Review
+# ============================================================
+# Automatically requests a code review from GitHub Copilot
+# on pull requests to main and develop branches.
+# ============================================================
+
+name: Copilot Code Review
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  copilot-review:
+    name: "Copilot Code Review"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: GitHub Copilot Code Review
+        uses: github/copilot-code-review@v1
+        with:
+          model: gpt-4o
+
