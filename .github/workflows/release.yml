@@ -1,0 +1,232 @@
+# ============================================================
+# Release Pipeline
+# ============================================================
+# Creates a GitHub Release with auto-generated changelog
+# when a version tag (v*.*.*) is pushed. Also triggers
+# Docker image builds for the tagged version.
+# ============================================================
+
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g., v1.0.0). Must already exist as a Git tag."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Run Tests Before Release
+  # ─────────────────────────────────────────────
+  test:
+    name: "Pre-Release Tests"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Frontend ──
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install & build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+
+      # ── Backend ──
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_sqlite, mbstring, xml, ctype, json, bcmath, gd, zip
+
+      - name: Test all services
+        run: |
+          for service in auth-service user-service inventory-service borrow-service audit-service; do
+            echo "=========================================="
+            echo "Testing $service"
+            echo "=========================================="
+            cd services/$service
+            composer install --no-interaction --prefer-dist --optimize-autoloader
+            cp .env.example .env 2>/dev/null || true
+            php artisan key:generate --force 2>/dev/null || true
+            vendor/bin/phpunit --colors=always
+            cd ../..
+          done
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ":memory:"
+
+  # ─────────────────────────────────────────────
+  # Create GitHub Release
+  # ─────────────────────────────────────────────
+  release:
+    name: "Create Release"
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine tag
+        id: get-tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: commits } = await github.rest.repos.compareCommitsWithBasehead({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              basehead: `${context.payload.before || 'HEAD~10'}...${context.sha}`,
+            }).catch(() => ({ data: { commits: [] } }));
+
+            let changelog = '## What\'s Changed\n\n';
+            const categories = {
+              feat: { title: '🚀 Features', items: [] },
+              fix: { title: '🐛 Bug Fixes', items: [] },
+              docs: { title: '📚 Documentation', items: [] },
+              ci: { title: '⚙️ CI/CD', items: [] },
+              other: { title: '🔧 Other Changes', items: [] },
+            };
+
+            for (const commit of (commits || [])) {
+              const msg = commit.commit.message.split('\n')[0];
+              const match = msg.match(/^(feat|fix|docs|ci|chore|refactor|test|style|perf)(\(.+\))?:\s*(.+)/);
+              if (match) {
+                const type = match[1];
+                const desc = match[3];
+                const cat = categories[type] || categories.other;
+                cat.items.push(`- ${desc} (${commit.sha.substring(0, 7)})`);
+              } else {
+                categories.other.items.push(`- ${msg} (${commit.sha.substring(0, 7)})`);
+              }
+            }
+
+            for (const cat of Object.values(categories)) {
+              if (cat.items.length > 0) {
+                changelog += `### ${cat.title}\n${cat.items.join('\n')}\n\n`;
+              }
+            }
+
+            core.setOutput('changelog', changelog);
+
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = '${{ steps.get-tag.outputs.tag }}';
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `Release ${tag}`,
+              body: `${{ steps.changelog.outputs.changelog }}` || `Release ${tag}\n\nSee [full changelog](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commits/${tag})`,
+              draft: false,
+              prerelease: tag.includes('-rc') || tag.includes('-beta') || tag.includes('-alpha'),
+            });
+
+  # ─────────────────────────────────────────────
+  # Build & Push Release Docker Images
+  # ─────────────────────────────────────────────
+  docker-release:
+    name: "Docker Release — ${{ matrix.service }}"
+    runs-on: ubuntu-latest
+    needs: release
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth-service
+            context: ./services/auth-service
+            dockerfile: ./services/auth-service/Dockerfile
+          - service: user-service
+            context: ./services/user-service
+            dockerfile: ./services/user-service/Dockerfile
+          - service: inventory-service
+            context: ./services/inventory-service
+            dockerfile: ./services/inventory-service/Dockerfile
+          - service: borrow-service
+            context: ./services/borrow-service
+            dockerfile: ./services/borrow-service/Dockerfile
+          - service: audit-service
+            context: ./services/audit-service
+            dockerfile: ./services/audit-service/Dockerfile
+          - service: frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/ceyntics-${{ matrix.service }}
+            ghcr.io/${{ github.repository_owner }}/ceyntics-${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
