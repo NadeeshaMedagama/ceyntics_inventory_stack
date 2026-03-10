@@ -1,0 +1,34 @@
+{
+  "name": "ceyntics-inventory-stack",
+  "version": "1.0.0",
+  "description": "- Docker and Docker Compose - Node.js (v20+)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:up": "docker-compose up -d postgres",
+    "install:backend": "for svc in auth user inventory borrow audit; do cd services/$svc-service && composer install && cd ../..; done",
+    "migrate:all": "for svc in auth user inventory borrow audit; do cd services/$svc-service && php artisan migrate:fresh --force && cd ../..; done",
+    "seed:all": "cd services/auth-service && php artisan db:seed --force",
+    "gateway": "node local-gateway.js",
+    "serve:auth": "cd services/auth-service && php artisan serve --port=8001",
+    "serve:user": "cd services/user-service && php artisan serve --port=8002",
+    "serve:inventory": "cd services/inventory-service && php artisan serve --port=8003",
+    "serve:borrow": "cd services/borrow-service && php artisan serve --port=8004",
+    "serve:audit": "cd services/audit-service && php artisan serve --port=8005",
+    "start:backend": "npx concurrently \"npm run gateway\" \"npm run serve:auth\" \"npm run serve:user\" \"npm run serve:inventory\" \"npm run serve:borrow\" \"npm run serve:audit\"",
+    "start:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run start:backend",
+    "dev:frontend": "npm run start:frontend",
+    "dev": "npx concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "setup:env": "node setup-env.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "express": "^5.2.1",
+    "http-proxy-middleware": "^3.0.5"
+  }
+}
