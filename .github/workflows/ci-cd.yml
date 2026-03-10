@@ -1,0 +1,365 @@
+# ============================================================
+# CI/CD Pipeline — Test, Build & Push Docker Images
+# ============================================================
+# Triggers on push/PR to main & develop branches.
+# Runs tests for all microservices + frontend, then builds
+# and pushes Docker images to Docker Hub on main branch.
+# ============================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      push-images:
+        description: "Push Docker images after tests pass"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  IMAGE_PREFIX: ceyntics
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Lint & Test — Frontend (Next.js)
+  # ─────────────────────────────────────────────
+  test-frontend:
+    name: "Frontend — Lint & Build"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Build Next.js
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+
+  # ─────────────────────────────────────────────
+  # Lint & Test — Auth Service (Laravel)
+  # ─────────────────────────────────────────────
+  test-auth-service:
+    name: "Auth Service — Tests"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/auth-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_sqlite, mbstring, xml, ctype, json, bcmath, gd, zip
+          coverage: xdebug
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-auth-${{ hashFiles('services/auth-service/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-auth-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env || true
+          php artisan key:generate --force || true
+
+      - name: Run PHPUnit tests
+        run: vendor/bin/phpunit --colors=always
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ":memory:"
+
+  # ─────────────────────────────────────────────
+  # Lint & Test — User Service (Laravel)
+  # ─────────────────────────────────────────────
+  test-user-service:
+    name: "User Service — Tests"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/user-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_sqlite, mbstring, xml, ctype, json, bcmath, gd, zip
+          coverage: xdebug
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-user-${{ hashFiles('services/user-service/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-user-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env || true
+          php artisan key:generate --force || true
+
+      - name: Run PHPUnit tests
+        run: vendor/bin/phpunit --colors=always
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ":memory:"
+
+  # ─────────────────────────────────────────────
+  # Lint & Test — Inventory Service (Laravel)
+  # ─────────────────────────────────────────────
+  test-inventory-service:
+    name: "Inventory Service — Tests"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/inventory-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_sqlite, mbstring, xml, ctype, json, bcmath, gd, zip
+          coverage: xdebug
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-inventory-${{ hashFiles('services/inventory-service/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-inventory-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env || true
+          php artisan key:generate --force || true
+
+      - name: Run PHPUnit tests
+        run: vendor/bin/phpunit --colors=always
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ":memory:"
+
+  # ─────────────────────────────────────────────
+  # Lint & Test — Borrow Service (Laravel)
+  # ─────────────────────────────────────────────
+  test-borrow-service:
+    name: "Borrow Service — Tests"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/borrow-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_sqlite, mbstring, xml, ctype, json, bcmath, gd, zip
+          coverage: xdebug
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-borrow-${{ hashFiles('services/borrow-service/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-borrow-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env || true
+          php artisan key:generate --force || true
+
+      - name: Run PHPUnit tests
+        run: vendor/bin/phpunit --colors=always
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ":memory:"
+
+  # ─────────────────────────────────────────────
+  # Lint & Test — Audit Service (Laravel)
+  # ─────────────────────────────────────────────
+  test-audit-service:
+    name: "Audit Service — Tests"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/audit-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_sqlite, mbstring, xml, ctype, json, bcmath, gd, zip
+          coverage: xdebug
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-audit-${{ hashFiles('services/audit-service/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-audit-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env || true
+          php artisan key:generate --force || true
+
+      - name: Run PHPUnit tests
+        run: vendor/bin/phpunit --colors=always
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ":memory:"
+
+  # ─────────────────────────────────────────────
+  # Build & Push Docker Images
+  # ─────────────────────────────────────────────
+  build-and-push:
+    name: "Build & Push Docker Images"
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.push-images == 'true')
+    needs:
+      - test-frontend
+      - test-auth-service
+      - test-user-service
+      - test-inventory-service
+      - test-borrow-service
+      - test-audit-service
+
+    strategy:
+      matrix:
+        include:
+          - service: auth-service
+            context: ./services/auth-service
+            dockerfile: ./services/auth-service/Dockerfile
+          - service: user-service
+            context: ./services/user-service
+            dockerfile: ./services/user-service/Dockerfile
+          - service: inventory-service
+            context: ./services/inventory-service
+            dockerfile: ./services/inventory-service/Dockerfile
+          - service: borrow-service
+            context: ./services/borrow-service
+            dockerfile: ./services/borrow-service/Dockerfile
+          - service: audit-service
+            context: ./services/audit-service
+            dockerfile: ./services/audit-service/Dockerfile
+          - service: frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
