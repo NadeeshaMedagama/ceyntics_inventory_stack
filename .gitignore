@@ -122,3 +122,12 @@ next-env.d.ts
 # composer.lock      ← TRACKED (needed for composer install)
 
 
+
+# Monorepo generated dependencies/build outputs
+**/node_modules/
+**/vendor/
+**/.next/
+**/out/
+**/dist/
+**/build/
+**/coverage/
