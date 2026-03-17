@@ -3,12 +3,24 @@
 import SidebarLayout from "@/components/layout/SidebarLayout";
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
-import { History, Search, ArrowDownRight, ArrowUpRight, CheckCircle2, AlertCircle } from "lucide-react";
+import { History, ArrowDownRight, ArrowUpRight, CheckCircle2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import IssueBorrowModal from "@/components/modals/IssueBorrowModal";
 
+interface BorrowRecord {
+    id: number;
+    borrower_name: string;
+    contact: string;
+    item_name: string;
+    item_code: string;
+    qty_borrowed: number;
+    borrow_date: string;
+    expected_return_date: string;
+    status: string;
+}
+
 export default function BorrowRecordsPage() {
-    const [records, setRecords] = useState<any[]>([]);
+    const [records, setRecords] = useState<BorrowRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [showIssueModal, setShowIssueModal] = useState(false);
 
