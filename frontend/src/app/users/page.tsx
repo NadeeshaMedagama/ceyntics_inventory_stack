@@ -4,12 +4,19 @@ import SidebarLayout from "@/components/layout/SidebarLayout";
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
-import { ShieldCheck, UserPlus, Server, Activity, ShieldAlert, Cpu } from "lucide-react";
+import { ShieldCheck, UserPlus, Server, Activity, ShieldAlert } from "lucide-react";
 import CreateUserModal from "@/components/modals/CreateUserModal";
+
+interface UserRecord {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+}
 
 export default function UsersPage() {
     const { user } = useAuthStore();
-    const [users, setUsers] = useState<any[]>([]);
+    const [users, setUsers] = useState<UserRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
 
