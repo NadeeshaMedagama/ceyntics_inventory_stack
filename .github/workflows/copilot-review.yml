@@ -8,8 +8,6 @@
 name: Copilot Code Review
 
 on:
-  pull_request:
-    branches: [main, develop]
   workflow_dispatch:
 
 permissions:
@@ -29,4 +27,3 @@ jobs:
         uses: github/copilot-code-review@v1
         with:
           model: gpt-4o
-
