@@ -11,9 +11,7 @@
 
 name: "Ceyntics Inventory Stack Deploy"
 description: >
-  Build, test, and deploy the Ceyntics Inventory Management microservices stack.
-  Supports 5 Laravel backend services + 1 Next.js frontend. Push Docker images
-  to Docker Hub and/or GitHub Container Registry (GHCR).
+  A production-grade, microservices-based inventory management platform
 author: "Ceyntics"
 
 branding:
