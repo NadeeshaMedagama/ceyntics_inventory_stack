@@ -7,8 +7,15 @@ import { Package, FolderOpen, AlertTriangle, ArrowUpRight, TrendingUp } from "lu
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { cn } from "@/lib/utils";
 
+interface DashboardStats {
+    total_items: number;
+    total_cupboards: number;
+    by_status: Record<string, number>;
+    low_stock: number;
+}
+
 export default function DashboardPage() {
-    const [stats, setStats] = useState<any>(null);
+    const [stats, setStats] = useState<DashboardStats | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -176,7 +183,15 @@ export default function DashboardPage() {
     );
 }
 
-function StatCard({ title, value, icon: Icon, trend, color }: any) {
+interface StatCardProps {
+    title: string;
+    value: number;
+    icon: React.ElementType;
+    trend: React.ReactNode;
+    color: string;
+}
+
+function StatCard({ title, value, icon: Icon, trend, color }: StatCardProps) {
     const colorMap = {
         brand: "from-brand-600/20 to-brand-500/5 border-brand-500/20 text-brand-400 bg-brand-500/10",
         indigo: "from-indigo-600/20 to-indigo-500/5 border-indigo-500/20 text-indigo-400 bg-indigo-500/10",
@@ -185,7 +200,7 @@ function StatCard({ title, value, icon: Icon, trend, color }: any) {
     };
 
     const selectedColor = colorMap[color as keyof typeof colorMap];
-    const [gradient, border, text, bg] = selectedColor.split(' ');
+    const [gradient, , text, bg] = selectedColor.split(' ');
 
     return (
         <div className={cn(
