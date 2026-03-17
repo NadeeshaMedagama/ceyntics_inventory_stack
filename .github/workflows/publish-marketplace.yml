@@ -27,14 +27,14 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Validate action.yml
         run: |
           echo "── Validating action.yml for Marketplace ──"
-          
+
           if [ ! -f action.yml ]; then
             echo "::error::action.yml not found in repository root"
             exit 1
@@ -91,14 +91,14 @@ jobs:
         run: |
           VERSION=${{ steps.tag.outputs.version }}
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
-          
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           # Update major version tag (e.g., v1)
           git tag -fa "$MAJOR" -m "Update $MAJOR tag to $VERSION"
           git push origin "$MAJOR" --force
-          
+
           echo "✅ Updated $MAJOR tag to point to $VERSION"
 
       - name: Create Marketplace Release
@@ -171,4 +171,3 @@ jobs:
               prerelease: isPrerelease,
               make_latest: !isPrerelease ? 'true' : 'false',
             });
-
