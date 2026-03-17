@@ -16,14 +16,12 @@ permissions:
 
 jobs:
   copilot-review:
-    name: "Copilot Code Review"
+    name: "Code Review"
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: GitHub Copilot Code Review
-        uses: github/copilot-code-review@v1
-        with:
-          model: gpt-4o
+      - name: Placeholder step
+        run: echo "Copilot code review is not available as a GitHub Action"
