@@ -3,12 +3,28 @@
 import SidebarLayout from "@/components/layout/SidebarLayout";
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
-import { Copy, Plus, Search, Filter, HardDrive, Cpu, AlertCircle, PenLine, Trash2 } from "lucide-react";
+import { Copy, Plus, Search, Filter, HardDrive, PenLine, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AddItemModal from "@/components/modals/AddItemModal";
+import Image from "next/image";
+
+interface InventoryItem {
+    id: number;
+    name: string;
+    description: string | null;
+    code: string;
+    serial_number: string | null;
+    image_url: string | null;
+    quantity: number;
+    status: string;
+    place: {
+        name: string;
+        cupboard: { name: string };
+    } | null;
+}
 
 export default function ItemsPage() {
-    const [items, setItems] = useState<any[]>([]);
+    const [items, setItems] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAddModal, setShowAddModal] = useState(false);
 
@@ -101,7 +117,7 @@ export default function ItemsPage() {
                                                 <div className="flex items-center gap-4">
                                                     <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
                                                         {item.image_url ? (
-                                                            <img src={item.image_url} alt={item.name} className="w-full h-full object-cover rounded-xl" />
+                                                            <Image src={item.image_url} alt={item.name} width={40} height={40} className="w-full h-full object-cover rounded-xl" />
                                                         ) : (
                                                             <HardDrive className="w-5 h-5 text-slate-400" />
                                                         )}
