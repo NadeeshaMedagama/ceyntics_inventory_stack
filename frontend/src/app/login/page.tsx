@@ -6,6 +6,7 @@ import { useAuthStore } from "@/store/auth";
 import api from "@/lib/api";
 import { PackageOpen, Lock, Mail, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from 'sonner';
+import { AxiosError } from 'axios';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -26,9 +27,10 @@ export default function LoginPage() {
                 description: `Logged in as ${data.user.name}`,
             });
             router.push("/dashboard");
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const axiosErr = err as AxiosError<{ message?: string }>;
             toast.error("Authentication failed", {
-                description: err.response?.data?.message || "Invalid credentials. Please try again.",
+                description: axiosErr.response?.data?.message || "Invalid credentials. Please try again.",
             });
         } finally {
             setIsLoading(false);
