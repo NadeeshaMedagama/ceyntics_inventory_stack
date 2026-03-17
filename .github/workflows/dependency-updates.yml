@@ -30,10 +30,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
 
@@ -69,7 +69,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -77,13 +77,16 @@ jobs:
           php-version: "8.3"
 
       - name: Install dependencies
+        if: hashFiles('composer.json') != ''
         run: composer install --no-interaction --prefer-dist
 
       - name: Run Composer audit
+        if: hashFiles('composer.json') != ''
         run: composer audit
         continue-on-error: true
 
       - name: List outdated packages
+        if: hashFiles('composer.json') != ''
         run: composer outdated --direct || true
 
   # ─────────────────────────────────────────────
@@ -103,7 +106,7 @@ jobs:
           script: |
             const title = `🔄 Dependency Update Required — ${new Date().toISOString().split('T')[0]}`;
             const body = `## Dependency Update Check Failed\n\nOne or more dependency checks found issues.\n\n**Workflow Run:** [View Details](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})\n\n### Action Required\n- Review the workflow logs for outdated or vulnerable dependencies\n- Update dependencies and test thoroughly\n- Create a PR with the updates`;
-            
+
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -111,4 +114,3 @@ jobs:
               body,
               labels: ['dependencies', 'automated']
             });
-
