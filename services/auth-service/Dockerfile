@@ -1,4 +1,4 @@
-FROM php:8.3-fpm-alpine
+FROM php:8.5-fpm-alpine
 
 RUN apk add --no-cache nginx postgresql-dev libpng-dev libjpeg-turbo-dev \
     freetype-dev libzip-dev zip unzip curl git supervisor \
