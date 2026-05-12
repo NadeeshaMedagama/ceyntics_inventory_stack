@@ -29,6 +29,6 @@
   "devDependencies": {
     "concurrently": "^9.2.1",
     "express": "^5.2.1",
-    "http-proxy-middleware": "^3.0.5"
+    "http-proxy-middleware": "^4.0.0"
   }
 }
