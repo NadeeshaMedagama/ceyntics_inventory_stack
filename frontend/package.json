@@ -10,26 +10,26 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "axios": "^1.15.2",
+    "axios": "^1.16.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "lucide-react": "^1.11.0",
+    "lucide-react": "^1.14.0",
     "next": "16.2.4",
     "react": "19.2.5",
     "react-dom": "19.2.5",
-    "react-hook-form": "^7.74.0",
+    "react-hook-form": "^7.75.0",
     "recharts": "^3.8.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
-    "zod": "^4.3.6",
-    "zustand": "^5.0.13"
+    "zod": "^4.4.3",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^25",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^10.2.1",
+    "eslint": "^10.3.0",
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
     "typescript": "^6"
