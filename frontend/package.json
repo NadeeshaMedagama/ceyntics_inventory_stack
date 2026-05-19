@@ -13,7 +13,7 @@
     "axios": "^1.16.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "lucide-react": "^1.14.0",
+    "lucide-react": "^1.16.0",
     "next": "16.2.4",
     "react": "19.2.6",
     "react-dom": "19.2.6",
