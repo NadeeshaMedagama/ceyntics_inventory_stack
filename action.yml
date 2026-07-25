@@ -132,7 +132,7 @@ runs:
     # ── Setup Node.js ────────────────────────
     - name: Setup Node.js ${{ inputs.node-version }}
       if: contains(inputs.services, 'frontend')
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@v7
       with:
         node-version: ${{ inputs.node-version }}
 
