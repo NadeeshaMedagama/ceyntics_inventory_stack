@@ -27,7 +27,7 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "concurrently": "^10.0.3",
+    "concurrently": "^10.0.4",
     "express": "^5.2.1",
     "http-proxy-middleware": "^4.2.0"
   }
