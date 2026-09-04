@@ -14,7 +14,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.37.0",
-    "next": "16.3.2",
+    "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-hook-form": "^7.86.0",
@@ -29,8 +29,8 @@
     "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^10.9.1",
-    "eslint-config-next": "16.3.2",
+    "eslint": "^10.9.0",
+    "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
     "typescript": "^7"
   }
