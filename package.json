@@ -28,7 +28,7 @@
   "type": "commonjs",
   "devDependencies": {
     "concurrently": "^10.0.5",
-    "express": "^5.2.1",
+    "express": "^5.3.0",
     "http-proxy-middleware": "^4.2.0"
   }
 }
